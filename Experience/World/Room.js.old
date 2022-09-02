@@ -1,0 +1,169 @@
+import * as THREE from "three";
+import Experience from "../Experience.js";
+import GSAP from "gsap";
+import { RectAreaLightHelper } from "three/examples/jsm/helpers/RectAreaLightHelper.js";
+import * as dat from "lil-gui";
+
+
+// Debug
+const gui = new dat.GUI()
+
+export default class Room {
+    constructor() {
+        this.experience = new Experience();
+        this.scene = this.experience.scene;
+        this.resources = this.experience.resources;
+        this.time = this.experience.time;
+        this.room = this.resources.items.room;
+        this.actualRoom = this.room.scene;
+        this.roomChildren = {};
+
+        this.lerp = {
+            current: 0,
+            target: 0,
+            ease: 0.1,
+        };
+
+        this.setModel();
+        this.setRaycaster();
+        this.setAnimation();
+        this.setRoomGroup();
+        this.onMouseMove();
+    }
+
+    setModel() {
+        this.actualRoom.children.forEach((child) => {
+            child.castShadow = true;
+            child.receiveShadow = true;
+
+            if (child instanceof THREE.Group) {
+                child.children.forEach((groupchild) => {
+                    groupchild.castShadow = true;
+                    groupchild.receiveShadow = true;
+                });
+            }
+
+            // console.log(child);
+
+            if (child.name === "Aquarium") {
+                // console.log(child);
+                child.children[0].material = new THREE.MeshPhysicalMaterial();
+                child.children[0].material.roughness = 0;
+                child.children[0].material.color.set(0x549dd2);
+                child.children[0].material.ior = 3;
+                child.children[0].material.transmission = 1;
+                child.children[0].material.opacity = 1;
+            }
+
+            if (child.name === "Computer") {
+                child.children[1].material = new THREE.MeshBasicMaterial({
+                    map: this.resources.items.screen,
+                });
+            }
+
+            if (child.name === "Floor") {
+                child.position.x = 0;
+                child.position.z = 0;
+            }
+
+            // if (
+            //     child.name === "Mailbox" ||
+            //     child.name === "Lamp" ||
+            //     child.name === "FloorFirst" ||
+            //     child.name === "FloorSecond" ||
+            //     child.name === "FloorThird" ||
+            //     child.name === "Dirt" ||
+            //     child.name === "Flower1" ||
+            //     child.name === "Flower2"
+            // ) {
+            //     child.scale.set(0, 0, 0);
+            // }
+
+            child.scale.set(0, 0, 0);
+            if (child.name === "Cube") {
+                //child.scale.set(2.0, 2.0, 2.0);
+                child.position.set(0, 1, 0);
+                //child.rotation.y = Math.PI / 4;
+            }
+
+            this.roomChildren[child.name.toLowerCase()] = child;
+        });
+
+        const width = 0.5
+        const height = 0.5;
+        const intensity = 1;
+        const rectLight = new THREE.RectAreaLight(
+            0xffffff,
+            intensity,
+            width,
+            height
+        );
+        rectLight.position.set(9.5, 13, -1.7);
+        rectLight.rotation.y = Math.PI / 1.35;
+        //rectLight.rotation.x = Math.PI / 1;
+        rectLight.rotation.z = Math.PI / 1;
+        this.actualRoom.add(rectLight);4
+
+        this.roomChildren["rectLight"] = rectLight;
+
+        const rectLightHelper = new RectAreaLightHelper(rectLight);
+        rectLight.add(rectLightHelper);
+        console.log(this.room);
+
+        this.scene.add(this.actualRoom);
+        this.actualRoom.scale.set(0.11, 0.11, 0.11);
+
+        // white spotlight shining from the side, casting a shadow
+
+    }
+
+    setRaycaster(){
+        /**
+        * Raycaster
+        */
+        const raycaster = new THREE.Raycaster()
+        let currentIntersect = null
+        const rayOrigin = new THREE.Vector3(- 3, 0, 0)
+        const rayDirection = new THREE.Vector3(10, 0, 0)
+        rayDirection.normalize()
+
+        raycaster.set(rayOrigin, rayDirection)
+    }
+
+    setAnimation() {
+        this.mixer = new THREE.AnimationMixer(this.actualRoom);
+        // this.swim = this.mixer.clipAction(this.room.animations[0]);
+        //this.swim.play();
+    }
+
+    onMouseMove() {
+        window.addEventListener("mousemove", (e) => {
+            this.rotation =
+                ((e.clientX - window.innerWidth / 2) * 2) / window.innerWidth;
+            this.lerp.target = this.rotation * 1.05;
+        });
+    }
+
+    setRoomGroup() {
+        // New group so we can rotate the bike with GSAP without intefering with our mouse rotation lerping
+        // Like a spinning plateform that can spin independetly from others
+        this.group = new THREE.Group()
+        this.group.add(this.actualRoom)
+        this.scene.add(this.group)
+      }
+
+    resize() {}
+
+    update() {
+        this.lerp.current = GSAP.utils.interpolate(
+            this.lerp.current,
+            this.lerp.target,
+            this.lerp.ease
+        );
+
+        this.actualRoom.rotation.y = this.lerp.current;
+        this.group.rotation.y = this.lerp.current
+
+        this.mixer.update(this.time.delta * 0.0009);
+    }
+}
